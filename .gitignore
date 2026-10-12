@@ -1,0 +1,23 @@
+# Logs
+*.log
+*.pyc
+__pycache__/
+
+# Environment
+.env
+.env.local
+
+# Telegram offset tracking
+tg_offset.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python virtual environment
+venv/
+env/
