@@ -11,31 +11,57 @@ import os
 import re
 import requests
 import datetime
+import random
 
-API_KEY = os.environ.get("RAPIDAPI_KEY", os.environ.get("API_FOOTBALL_KEY", "")).strip()
+# سیستم چرخشی API Keys - 5 کلید = 500 درخواست روزانه
+API_KEYS = [
+    "b6da7d3ae058e193ddfa7d5899118c25",
+    "823d3e56dd0ec2a4f540f34d6af10109",
+    "04dd219f140d04a059f5b26dc90b4787",
+    "95f257bda61369aec43315933cac8278",
+    "feec2f3f3a506e5e54ca4bca3945749b"
+]
+
+# اگر متغیر محیطی وجود داشت، به لیست اضافه کن
+env_key = os.environ.get("RAPIDAPI_KEY", os.environ.get("API_FOOTBALL_KEY", "")).strip()
+if env_key and env_key not in API_KEYS:
+    API_KEYS.insert(0, env_key)
+
 TEHRAN_TZ = datetime.timezone(datetime.timedelta(hours=3, minutes=30))
+_call_counter = 0  # شمارنده تعداد فراخوانی‌ها
+
+
+def _get_api_key():
+    """انتخاب هوشمند API key با الگوریتم Round-Robin"""
+    global _call_counter
+    key = API_KEYS[_call_counter % len(API_KEYS)]
+    _call_counter += 1
+    return key
 
 
 def _headers():
     """تنظیم هدرها بر اساس نوع کلید (مستقیم یا RapidAPI)"""
-    is_direct = (len(API_KEY) == 32 and "-" not in API_KEY)
+    api_key = _get_api_key()
+    is_direct = (len(api_key) == 32 and "-" not in api_key)
     if is_direct:
-        return "https://v3.football.api-sports.io", {"x-apisports-key": API_KEY}
+        return "https://v3.football.api-sports.io", {"x-apisports-key": api_key}
     return "https://api-football-v1.p.rapidapi.com/v3", {
-        "X-RapidAPI-Key": API_KEY,
+        "X-RapidAPI-Key": api_key,
         "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
     }
 
 
-def call_api(endpoint: str):
-    """فراخوانی امن API-Football با کنترل خطا"""
-    if not API_KEY:
-        return None
+def call_api(endpoint: str, retry_count: int = 0):
+    """فراخوانی امن API-Football با چرخش خودکار کلیدها در صورت خطا"""
     base, headers = _headers()
     try:
         r = requests.get(f"{base}/{endpoint}", headers=headers, timeout=12)
         if r.status_code == 200:
             return r.json().get("response", [])
+        elif r.status_code == 429 and retry_count < len(API_KEYS):
+            # اگر کلید به محدودیت رسید، کلید بعدی را امتحان کن
+            print(f"⚠️ کلید به محدودیت رسید، تلاش با کلید بعدی...")
+            return call_api(endpoint, retry_count + 1)
     except Exception as e:
         print(f"خطای شبکه در {endpoint}: {e}")
     return None
